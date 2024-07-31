@@ -1,20 +1,142 @@
-﻿// 3d_bounding_box.cpp : 이 파일에는 'main' 함수가 포함됩니다. 거기서 프로그램 실행이 시작되고 종료됩니다.
-//
-
+﻿#include <GL/glut.h>
+#include <GL/gl.h>
+#include <GL/glu.h>
+#include <glm/glm/glm.hpp>
+#include <glm/glm/gtc/matrix_transform.hpp>
+#include <glm/glm/gtc/type_ptr.hpp>
+#include <vector>
 #include <iostream>
+#include <fstream>
+#include <sstream>
 
-int main()
-{
-    std::cout << "Hello World!\n";
+struct Triangle {
+    glm::vec3 normal;
+    glm::vec3 vertex1, vertex2, vertex3;
+};
+
+std::vector<Triangle> loadSTL(const std::string& filepath) {
+    std::vector<Triangle> triangles;
+    std::ifstream file(filepath, std::ios::binary);
+
+    if (!file.is_open()) {
+        std::cerr << "Failed to open file: " << filepath << std::endl;
+        return triangles;
+    }
+
+    char header[80] = "";
+    file.read(header, 80);
+
+    unsigned int numTriangles = 0;
+    file.read(reinterpret_cast<char*>(&numTriangles), sizeof(unsigned int));
+
+    for (unsigned int i = 0; i < numTriangles; ++i) {
+        Triangle triangle;
+        file.read(reinterpret_cast<char*>(&triangle.normal), sizeof(glm::vec3));
+        file.read(reinterpret_cast<char*>(&triangle.vertex1), sizeof(glm::vec3));
+        file.read(reinterpret_cast<char*>(&triangle.vertex2), sizeof(glm::vec3));
+        file.read(reinterpret_cast<char*>(&triangle.vertex3), sizeof(glm::vec3));
+        triangles.push_back(triangle);
+        file.ignore(2);
+    }
+
+    file.close();
+    return triangles;
 }
 
-// 프로그램 실행: <Ctrl+F5> 또는 [디버그] > [디버깅하지 않고 시작] 메뉴
-// 프로그램 디버그: <F5> 키 또는 [디버그] > [디버깅 시작] 메뉴
+void drawOOBB(const std::vector<Triangle>& triangles) {
+    if (triangles.empty()) return;
 
-// 시작을 위한 팁: 
-//   1. [솔루션 탐색기] 창을 사용하여 파일을 추가/관리합니다.
-//   2. [팀 탐색기] 창을 사용하여 소스 제어에 연결합니다.
-//   3. [출력] 창을 사용하여 빌드 출력 및 기타 메시지를 확인합니다.
-//   4. [오류 목록] 창을 사용하여 오류를 봅니다.
-//   5. [프로젝트] > [새 항목 추가]로 이동하여 새 코드 파일을 만들거나, [프로젝트] > [기존 항목 추가]로 이동하여 기존 코드 파일을 프로젝트에 추가합니다.
-//   6. 나중에 이 프로젝트를 다시 열려면 [파일] > [열기] > [프로젝트]로 이동하고 .sln 파일을 선택합니다.
+    std::vector<glm::vec3> vertices;
+    for (const auto& triangle : triangles) {
+        vertices.push_back(triangle.vertex1);
+        vertices.push_back(triangle.vertex2);
+        vertices.push_back(triangle.vertex3);
+    }
+
+    glm::vec3 min = vertices[0];
+    glm::vec3 max = vertices[0];
+    for (const auto& vertex : vertices) {
+        min = glm::min(min, vertex);
+        max = glm::max(max, vertex);
+    }
+
+    glm::vec3 center = (min + max) * 0.5f;
+    glm::vec3 size = max - min;
+
+    glPushMatrix();
+    glTranslatef(center.x, center.y, center.z);
+    glScalef(size.x, size.y, size.z);
+
+    glBegin(GL_LINES);
+    glVertex3f(-0.5f, -0.5f, -0.5f); glVertex3f(0.5f, -0.5f, -0.5f);
+    glVertex3f(0.5f, -0.5f, -0.5f); glVertex3f(0.5f, 0.5f, -0.5f);
+    glVertex3f(0.5f, 0.5f, -0.5f); glVertex3f(-0.5f, 0.5f, -0.5f);
+    glVertex3f(-0.5f, 0.5f, -0.5f); glVertex3f(-0.5f, -0.5f, -0.5f);
+
+    glVertex3f(-0.5f, -0.5f, 0.5f); glVertex3f(0.5f, -0.5f, 0.5f);
+    glVertex3f(0.5f, -0.5f, 0.5f); glVertex3f(0.5f, 0.5f, 0.5f);
+    glVertex3f(0.5f, 0.5f, 0.5f); glVertex3f(-0.5f, 0.5f, 0.5f);
+    glVertex3f(-0.5f, 0.5f, 0.5f); glVertex3f(-0.5f, -0.5f, 0.5f);
+
+    glVertex3f(-0.5f, -0.5f, -0.5f); glVertex3f(-0.5f, -0.5f, 0.5f);
+    glVertex3f(0.5f, -0.5f, -0.5f); glVertex3f(0.5f, -0.5f, 0.5f);
+    glVertex3f(0.5f, 0.5f, -0.5f); glVertex3f(0.5f, 0.5f, 0.5f);
+    glVertex3f(-0.5f, 0.5f, -0.5f); glVertex3f(-0.5f, 0.5f, 0.5f);
+    glEnd();
+
+    glPopMatrix();
+}
+
+std::vector<Triangle> model;
+glm::vec3 center;
+
+void display() {
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glLoadIdentity();
+
+    // 카메라 위치를 모델의 중심에 기반하여 설정
+    gluLookAt(center.x + 3.0f, center.y + 3.0f, center.z + 3.0f,  // 카메라 위치
+        center.x, center.y, center.z,                      // 모델의 중심
+        0.0f, 1.0f, 0.0f);                                // 업 벡터
+
+    drawOOBB(model);
+
+    glutSwapBuffers();
+}
+
+void initOpenGL(int argc, char** argv) {
+    glutInit(&argc, argv);
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
+    glutInitWindowSize(800, 600);
+    glutCreateWindow("STL OOBB Example");
+
+    glEnable(GL_DEPTH_TEST);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+
+    glColor3f(1.0f, 1.0f, 1.0f);
+
+    glutDisplayFunc(display);
+    glutMainLoop();
+}
+
+int main(int argc, char** argv) {
+
+    model = loadSTL("C:/Users/brian/OneDrive/바탕 화면/3d_bounding_box/cat.stl");
+
+
+    // 모델의 중심을 계산
+    glm::vec3 min = model[0].vertex1;
+    glm::vec3 max = model[0].vertex1;
+    for (const auto& triangle : model) {
+        min = glm::min(min, triangle.vertex1);
+        min = glm::min(min, triangle.vertex2);
+        min = glm::min(min, triangle.vertex3);
+        max = glm::max(max, triangle.vertex1);
+        max = glm::max(max, triangle.vertex2);
+        max = glm::max(max, triangle.vertex3);
+    }
+    center = (min + max) * 0.5f;
+
+    initOpenGL(argc, argv);
+    return 0;
+}
