@@ -5,6 +5,11 @@
 #include <fstream>
 #include <sstream>
 
+float rotationX = 0.0f;
+float rotationY = 0.0f;
+int lastMouseX, lastMouseY;
+bool isDragging = false;
+
 struct Triangle {
     glm::vec3 normal;
     glm::vec3 vertices[3];
@@ -14,6 +19,30 @@ struct AABB {
     glm::vec3 min;
     glm::vec3 max;
 };
+
+void mouseButton(int button, int state, int x, int y) {
+    if (button == GLUT_LEFT_BUTTON) {
+        if (state == GLUT_DOWN) {
+            isDragging = true;
+            lastMouseX = x;
+            lastMouseY = y;
+        }
+        else if (state == GLUT_UP) {
+            isDragging = false;
+        }
+    }
+}
+
+void mouseMotion(int x, int y) {
+    if (isDragging) {
+        rotationX += (y - lastMouseY) * 0.5f;
+        rotationY += (x - lastMouseX) * 0.5f;
+        lastMouseX = x;
+        lastMouseY = y;
+
+        glutPostRedisplay();
+    }
+}
 
 AABB calculateAABB(const std::vector<Triangle>& triangles) {
     AABB box;
@@ -117,6 +146,9 @@ void display() {
         0.0, 0.0, 0.0,   
         0.0, 1.0, 0.0);  
 
+    glRotatef(rotationX, 1.0f, 0.0f, 0.0f); // X축 회전
+    glRotatef(rotationY, 0.0f, 1.0f, 0.0f); // Y축 회전
+
     renderSTL(stlModel);
 
     // AABB 렌더링
@@ -166,6 +198,9 @@ int main(int argc, char** argv) {
 
     glutDisplayFunc(display);
     glutReshapeFunc(reshape);
+
+    glutMouseFunc(mouseButton);      // 마우스 버튼 콜백
+    glutMotionFunc(mouseMotion);     // 마우스 이동 콜백
 
     glutMainLoop();
 
