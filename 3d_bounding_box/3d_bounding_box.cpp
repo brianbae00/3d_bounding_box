@@ -151,49 +151,48 @@ void display() {
 
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
-    gluLookAt(1.0, 0.0, 0.0,  // 카메라 위치
-        0.0, 0.0, 0.0,  // 카메라가 바라보는 지점
-        0.0, 1.0, 0.0); // 월드 업 벡터
+    gluLookAt(1.0, 0.0, 0.0, 
+        0.0, 0.0, 0.0,  
+        0.0, 1.0, 0.0);
 
-    glRotatef(rotationX, 1.0f, 0.0f, 0.0f); // X축 회전
-    glRotatef(rotationY, 0.0f, 1.0f, 0.0f); // Y축 회전
+    glRotatef(rotationX, 1.0f, 0.0f, 0.0f); 
+    glRotatef(rotationY, 0.0f, 1.0f, 0.0f); 
 
-    // 첫 번째 모델 렌더링
-    glColor3f(0.5f, 0.5f, 0.5f); // 첫 번째 모델을 회색으로 렌더링
+    glColor3f(0.5f, 0.5f, 0.5f);
     renderSTL(stlModel1);
 
-    // 두 번째 모델 렌더링 (위치를 이동)
     glPushMatrix();
-    glm::vec3 translation2(0.0f, 0.0f, -0.1f); // 두 번째 모델 이동 벡터
+    glm::vec3 translation2(0.0f, 0.0f, -0.1f); 
     glTranslatef(translation2.x, translation2.y, translation2.z);
-    glColor3f(0.5f, 0.5f, 0.5f); // 두 번째 모델을 회색으로 렌더링
+    glColor3f(0.5f, 0.5f, 0.5f);
     renderSTL(stlModel2);
 
-    // 이동된 두 번째 모델의 새로운 AABB 계산
     AABB movedAABB2 = modelAABB2;
     movedAABB2.min += translation2;
     movedAABB2.max += translation2;
 
     glPopMatrix();
 
-    // AABB 충돌 감지
     bool collision = checkAABBCollision(modelAABB1, movedAABB2);
 
-    // 첫 번째 모델의 AABB 렌더링
-    if (collision) {
-        glColor3f(1.0f, 0.0f, 0.0f); // 충돌 시 첫 번째 AABB를 빨간색으로 렌더링
+    if (collision) 
+    {
+        glColor3f(1.0f, 0.0f, 0.0f); 
     }
-    else {
-        glColor3f(1.0f, 1.0f, 1.0f); // 충돌하지 않으면 첫 번째 AABB를 흰색으로 렌더링
+    else 
+    {
+        glColor3f(1.0f, 1.0f, 1.0f);
     }
     renderAABB(modelAABB1);
 
     // 두 번째 모델의 AABB 렌더링
-    if (collision) {
-        glColor3f(1.0f, 0.0f, 0.0f); // 충돌 시 두 번째 AABB를 빨간색으로 렌더링
+    if (collision) 
+    {
+        glColor3f(1.0f, 0.0f, 0.0f); 
     }
-    else {
-        glColor3f(1.0f, 1.0f, 1.0f); // 충돌하지 않으면 두 번째 AABB를 흰색으로 렌더링
+    else 
+    {
+        glColor3f(1.0f, 1.0f, 1.0f); 
     }
     renderAABB(movedAABB2);
 
@@ -223,21 +222,18 @@ void setupLighting() {
     glLightfv(GL_LIGHT0, GL_DIFFUSE, diffuseLight);
     glLightfv(GL_LIGHT0, GL_SPECULAR, specularLight);
 
-    // 색상 설정을 재질에 반영하도록 설정
     glEnable(GL_COLOR_MATERIAL);
     glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
 }
 
 
 int main(int argc, char** argv) {
-    // 첫 번째 STL 파일 로드
     std::string filepath1 = "C:/Users/brian/OneDrive/바탕 화면/3d_bounding_box/cat.stl";
     if (!loadSTL(filepath1, stlModel1)) {
         return -1;
     }
     modelAABB1 = calculateAABB(stlModel1);
 
-    // 두 번째 STL 파일 로드
     std::string filepath2 = "C:/Users/brian/OneDrive/바탕 화면/3d_bounding_box/dog.stl";
     if (!loadSTL(filepath2, stlModel2)) {
         return -1;
@@ -255,8 +251,8 @@ int main(int argc, char** argv) {
     glutDisplayFunc(display);
     glutReshapeFunc(reshape);
 
-    glutMouseFunc(mouseButton);      // 마우스 버튼 콜백
-    glutMotionFunc(mouseMotion);     // 마우스 이동 콜백
+    glutMouseFunc(mouseButton);
+    glutMotionFunc(mouseMotion);
 
     glutMainLoop();
 
