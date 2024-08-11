@@ -151,47 +151,56 @@ void display() {
 
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
-    gluLookAt(1.0, 0.0, 0.0,
-        0.0, 0.0, 0.0,
-        0.0, 1.0, 0.0);
+    gluLookAt(1.0, 0.0, 0.0,  // 카메라 위치
+        0.0, 0.0, 0.0,  // 카메라가 바라보는 지점
+        0.0, 1.0, 0.0); // 월드 업 벡터
 
     glRotatef(rotationX, 1.0f, 0.0f, 0.0f); // X축 회전
     glRotatef(rotationY, 0.0f, 1.0f, 0.0f); // Y축 회전
 
-    // AABB 충돌 감지
-    AABB shiftedAABB2 = modelAABB2;
-    shiftedAABB2.min.z -= 0.2f; // 두 번째 모델의 이동을 반영
-    shiftedAABB2.max.z -= 0.2f;
-
-    bool collision = checkAABBCollision(modelAABB1, shiftedAABB2);
-
-    // 첫 번째 모델과 AABB 렌더링
-    glColor3f(0.5f, 0.5f, 0.5f);
+    // 첫 번째 모델 렌더링
+    glColor3f(0.5f, 0.5f, 0.5f); // 첫 번째 모델을 회색으로 렌더링
     renderSTL(stlModel1);
+
+    // 두 번째 모델 렌더링 (위치를 이동)
+    glPushMatrix();
+    glm::vec3 translation2(0.0f, 0.0f, -0.1f); // 두 번째 모델 이동 벡터
+    glTranslatef(translation2.x, translation2.y, translation2.z);
+    glColor3f(0.5f, 0.5f, 0.5f); // 두 번째 모델을 회색으로 렌더링
+    renderSTL(stlModel2);
+
+    // 이동된 두 번째 모델의 새로운 AABB 계산
+    AABB movedAABB2 = modelAABB2;
+    movedAABB2.min += translation2;
+    movedAABB2.max += translation2;
+
+    glPopMatrix();
+
+    // AABB 충돌 감지
+    bool collision = checkAABBCollision(modelAABB1, movedAABB2);
+
+    // 첫 번째 모델의 AABB 렌더링
     if (collision) {
-        glColor3f(1.0f, 0.0f, 0.0f); // 충돌 시 AABB를 빨간색으로 렌더링
+        glColor3f(1.0f, 0.0f, 0.0f); // 충돌 시 첫 번째 AABB를 빨간색으로 렌더링
     }
     else {
-        glColor3f(1.0f, 1.0f, 1.0f); // 충돌하지 않으면 AABB를 흰색으로 렌더링
+        glColor3f(1.0f, 1.0f, 1.0f); // 충돌하지 않으면 첫 번째 AABB를 흰색으로 렌더링
     }
     renderAABB(modelAABB1);
 
-    // 두 번째 모델과 AABB 렌더링 (위치를 오른쪽으로 이동)
-    glPushMatrix();
-    glTranslatef(0.0f, 0.0f, -0.2f); // 두 번째 모델을 오른쪽으로 이동
-    glColor3f(0.5f, 0.5f, 0.5f);
-    renderSTL(stlModel2);
+    // 두 번째 모델의 AABB 렌더링
     if (collision) {
-        glColor3f(1.0f, 0.0f, 0.0f); // 충돌 시 AABB를 빨간색으로 렌더링
+        glColor3f(1.0f, 0.0f, 0.0f); // 충돌 시 두 번째 AABB를 빨간색으로 렌더링
     }
     else {
-        glColor3f(1.0f, 1.0f, 1.0f); // 충돌하지 않으면 AABB를 흰색으로 렌더링
+        glColor3f(1.0f, 1.0f, 1.0f); // 충돌하지 않으면 두 번째 AABB를 흰색으로 렌더링
     }
-    renderAABB(modelAABB2);
-    glPopMatrix();
+    renderAABB(movedAABB2);
 
     glutSwapBuffers();
 }
+
+
 
 void reshape(int width, int height) {
     glViewport(0, 0, width, height);
