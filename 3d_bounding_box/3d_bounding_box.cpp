@@ -5,6 +5,11 @@
 #include <fstream>
 #include <sstream>
 
+float rotationX = 0.0f;
+float rotationY = 0.0f;
+int lastMouseX, lastMouseY;
+bool isDragging = false;
+
 struct Triangle {
     glm::vec3 normal;
     glm::vec3 vertices[3];
@@ -14,6 +19,42 @@ struct AABB {
     glm::vec3 min;
     glm::vec3 max;
 };
+
+struct OctreeNode {
+    AABB box; 
+    std::vector<Triangle> triangles; 
+    OctreeNode* children[8] = { nullptr };
+
+    ~OctreeNode() {
+        for (int i = 0; i < 8; ++i) {
+            delete children[i];
+        }
+    }
+};
+
+void mouseButton(int button, int state, int x, int y) {
+    if (button == GLUT_LEFT_BUTTON) {
+        if (state == GLUT_DOWN) {
+            isDragging = true;
+            lastMouseX = x;
+            lastMouseY = y;
+        }
+        else if (state == GLUT_UP) {
+            isDragging = false;
+        }
+    }
+}
+
+void mouseMotion(int x, int y) {
+    if (isDragging) {
+        rotationX += (y - lastMouseY) * 0.5f;
+        rotationY += (x - lastMouseX) * 0.5f;
+        lastMouseX = x;
+        lastMouseY = y;
+
+        glutPostRedisplay();
+    }
+}
 
 AABB calculateAABB(const std::vector<Triangle>& triangles) {
     AABB box;
@@ -64,6 +105,90 @@ void renderAABB(const AABB& box) {
     glEnd();
 }
 
+OctreeNode* buildOctree(const std::vector<Triangle>& triangles, const AABB& box, int depth = 0) {
+    OctreeNode* node = new OctreeNode();
+    node->box = box;
+
+    if (depth >= 2 || triangles.size() <= 1) {
+        node->triangles = triangles;
+        return node;
+    }
+
+    glm::vec3 center = (box.min + box.max) * 0.5f;
+    std::vector<Triangle> childrenTriangles[8];
+
+    for (const auto& tri : triangles) {
+        bool assigned = false;
+        for (int i = 0; i < 8; ++i) {
+            glm::vec3 min = box.min;
+            glm::vec3 max = center;
+
+            if (i & 1) min.x = center.x; else max.x = center.x;
+            if (i & 2) min.y = center.y; else max.y = center.y;
+            if (i & 4) min.z = center.z; else max.z = center.z;
+
+            AABB childBox{ min, max };
+
+            bool intersects = false;
+            for (int j = 0; j < 3; ++j) {
+                if (tri.vertices[j].x >= min.x && tri.vertices[j].x <= max.x &&
+                    tri.vertices[j].y >= min.y && tri.vertices[j].y <= max.y &&
+                    tri.vertices[j].z >= min.z && tri.vertices[j].z <= max.z) {
+                    intersects = true;
+                }
+            }
+
+            if (intersects) {
+                childrenTriangles[i].push_back(tri);
+                assigned = true;
+            }
+        }
+
+        if (!assigned) {
+            node->triangles.push_back(tri);
+        }
+    }
+
+    for (int i = 0; i < 8; ++i) {
+        if (!childrenTriangles[i].empty()) {
+            glm::vec3 min = box.min;
+            glm::vec3 max = center;
+
+            if (i & 1) min.x = center.x; else max.x = center.x;
+            if (i & 2) min.y = center.y; else max.y = center.y;
+            if (i & 4) min.z = center.z; else max.z = center.z;
+
+            node->children[i] = buildOctree(childrenTriangles[i], { min, max }, depth + 1);
+        }
+    }
+
+    return node;
+}
+
+
+void renderOctree(const OctreeNode* node, int depth = 0) {
+    if (!node) return;
+
+    // 깊이에 따라 색상 변경
+    if (depth == 0)
+        glColor3f(1.0f, 0.0f, 0.0f); // 레드
+    else if (depth == 1)
+        glColor3f(0.0f, 1.0f, 0.0f); // 그린
+    else if (depth == 2)
+        glColor3f(0.0f, 0.0f, 1.0f); // 블루
+
+    // 깊이에 따라 선 두께를 다르게 설정
+    glLineWidth(1.0f + depth);
+    renderAABB(node->box);
+
+    if (depth < 2) {  // 2단계까지만 자식 노드 렌더링
+        for (int i = 0; i < 8; ++i) {
+            renderOctree(node->children[i], depth + 1);
+        }
+    }
+}
+
+
 bool loadSTL(const std::string& filepath, std::vector<Triangle>& triangles) {
     std::ifstream file(filepath, std::ios::binary);
     if (!file.is_open()) {
@@ -108,6 +233,7 @@ void renderSTL(const std::vector<Triangle>& triangles) {
 
 std::vector<Triangle> stlModel;
 AABB modelAABB;
+OctreeNode* octreeRoot = nullptr;
 void display() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -117,11 +243,13 @@ void display() {
         0.0, 0.0, 0.0,   
         0.0, 1.0, 0.0);  
 
+    glRotatef(rotationX, 1.0f, 0.0f, 0.0f); // X축 회전
+    glRotatef(rotationY, 0.0f, 1.0f, 0.0f); // Y축 회전
+
     renderSTL(stlModel);
 
-    // AABB 렌더링
-    glColor3f(1.0f, 0.0f, 0.0f); // AABB를 빨간색으로 렌더링
-    renderAABB(modelAABB);
+    // Octree 렌더링
+    renderOctree(octreeRoot);
 
     glutSwapBuffers();
 }
@@ -155,6 +283,8 @@ int main(int argc, char** argv) {
     }
     // AABB 계산
     modelAABB = calculateAABB(stlModel);
+    // Octree 생성
+    octreeRoot = buildOctree(stlModel, modelAABB);
 
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
@@ -166,8 +296,11 @@ int main(int argc, char** argv) {
 
     glutDisplayFunc(display);
     glutReshapeFunc(reshape);
+    glutMouseFunc(mouseButton);      // 마우스 버튼 콜백
+    glutMotionFunc(mouseMotion);     // 마우스 이동 콜백
 
     glutMainLoop();
-
+    // Octree 메모리 해제
+    delete octreeRoot;
     return 0;
 }
