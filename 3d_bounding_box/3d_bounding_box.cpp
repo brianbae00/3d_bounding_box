@@ -1,142 +1,173 @@
-﻿#include <GL/glut.h>
-#include <GL/gl.h>
-#include <GL/glu.h>
-#include <glm/glm/glm.hpp>
-#include <glm/glm/gtc/matrix_transform.hpp>
-#include <glm/glm/gtc/type_ptr.hpp>
+﻿#include <iostream>
 #include <vector>
-#include <iostream>
+#include <GL/glut.h>
+#include <glm/glm/glm.hpp>
 #include <fstream>
 #include <sstream>
 
 struct Triangle {
     glm::vec3 normal;
-    glm::vec3 vertex1, vertex2, vertex3;
+    glm::vec3 vertices[3];
 };
 
-std::vector<Triangle> loadSTL(const std::string& filepath) {
-    std::vector<Triangle> triangles;
-    std::ifstream file(filepath, std::ios::binary);
+struct AABB {
+    glm::vec3 min;
+    glm::vec3 max;
+};
 
+AABB calculateAABB(const std::vector<Triangle>& triangles) {
+    AABB box;
+    if (triangles.empty()) return box;
+
+    box.min = triangles[0].vertices[0];
+    box.max = triangles[0].vertices[0];
+
+    for (const auto& tri : triangles) {
+        for (int i = 0; i < 3; ++i) {
+            box.min = glm::min(box.min, tri.vertices[i]);
+            box.max = glm::max(box.max, tri.vertices[i]);
+        }
+    }
+    return box;
+}
+
+void renderAABB(const AABB& box) {
+    glLineWidth(3.0f);
+    glBegin(GL_LINES);
+
+    glm::vec3 vertices[8] = {
+        {box.min.x, box.min.y, box.min.z},
+        {box.max.x, box.min.y, box.min.z},
+        {box.max.x, box.max.y, box.min.z},
+        {box.min.x, box.max.y, box.min.z},
+        {box.min.x, box.min.y, box.max.z},
+        {box.max.x, box.min.y, box.max.z},
+        {box.max.x, box.max.y, box.max.z},
+        {box.min.x, box.max.y, box.max.z}
+    };
+
+    glVertex3fv(&vertices[0][0]); glVertex3fv(&vertices[1][0]);
+    glVertex3fv(&vertices[1][0]); glVertex3fv(&vertices[2][0]);
+    glVertex3fv(&vertices[2][0]); glVertex3fv(&vertices[3][0]);
+    glVertex3fv(&vertices[3][0]); glVertex3fv(&vertices[0][0]);
+
+    glVertex3fv(&vertices[4][0]); glVertex3fv(&vertices[5][0]);
+    glVertex3fv(&vertices[5][0]); glVertex3fv(&vertices[6][0]);
+    glVertex3fv(&vertices[6][0]); glVertex3fv(&vertices[7][0]);
+    glVertex3fv(&vertices[7][0]); glVertex3fv(&vertices[4][0]);
+
+    glVertex3fv(&vertices[0][0]); glVertex3fv(&vertices[4][0]);
+    glVertex3fv(&vertices[1][0]); glVertex3fv(&vertices[5][0]);
+    glVertex3fv(&vertices[2][0]); glVertex3fv(&vertices[6][0]);
+    glVertex3fv(&vertices[3][0]); glVertex3fv(&vertices[7][0]);
+
+    glEnd();
+}
+
+bool loadSTL(const std::string& filepath, std::vector<Triangle>& triangles) {
+    std::ifstream file(filepath, std::ios::binary);
     if (!file.is_open()) {
-        std::cerr << "Failed to open file: " << filepath << std::endl;
-        return triangles;
+        std::cerr << "Failed to open STL file: " << filepath << std::endl;
+        return false;
     }
 
     char header[80] = "";
     file.read(header, 80);
 
-    unsigned int numTriangles = 0;
-    file.read(reinterpret_cast<char*>(&numTriangles), sizeof(unsigned int));
+    uint32_t triangleCount;
+    file.read(reinterpret_cast<char*>(&triangleCount), sizeof(uint32_t));
 
-    for (unsigned int i = 0; i < numTriangles; ++i) {
-        Triangle triangle;
-        file.read(reinterpret_cast<char*>(&triangle.normal), sizeof(glm::vec3));
-        file.read(reinterpret_cast<char*>(&triangle.vertex1), sizeof(glm::vec3));
-        file.read(reinterpret_cast<char*>(&triangle.vertex2), sizeof(glm::vec3));
-        file.read(reinterpret_cast<char*>(&triangle.vertex3), sizeof(glm::vec3));
-        triangles.push_back(triangle);
-        file.ignore(2);
+    triangles.resize(triangleCount);
+
+    for (uint32_t i = 0; i < triangleCount; ++i) {
+        Triangle& tri = triangles[i];
+
+        file.read(reinterpret_cast<char*>(&tri.normal), sizeof(glm::vec3));
+        file.read(reinterpret_cast<char*>(&tri.vertices[0]), sizeof(glm::vec3));
+        file.read(reinterpret_cast<char*>(&tri.vertices[1]), sizeof(glm::vec3));
+        file.read(reinterpret_cast<char*>(&tri.vertices[2]), sizeof(glm::vec3));
+
+        uint16_t attributeByteCount;
+        file.read(reinterpret_cast<char*>(&attributeByteCount), sizeof(uint16_t));
     }
 
     file.close();
-    return triangles;
+    return true;
 }
 
-void drawOOBB(const std::vector<Triangle>& triangles) {
-    if (triangles.empty()) return;
-
-    std::vector<glm::vec3> vertices;
-    for (const auto& triangle : triangles) {
-        vertices.push_back(triangle.vertex1);
-        vertices.push_back(triangle.vertex2);
-        vertices.push_back(triangle.vertex3);
+void renderSTL(const std::vector<Triangle>& triangles) {
+    glBegin(GL_TRIANGLES);
+    for (const auto& tri : triangles) {
+        glNormal3fv(&tri.normal[0]);
+        for (int i = 0; i < 3; ++i) {
+            glVertex3fv(&tri.vertices[i][0]);
+        }
     }
-
-    glm::vec3 min = vertices[0];
-    glm::vec3 max = vertices[0];
-    for (const auto& vertex : vertices) {
-        min = glm::min(min, vertex);
-        max = glm::max(max, vertex);
-    }
-
-    glm::vec3 center = (min + max) * 0.5f;
-    glm::vec3 size = max - min;
-
-    glPushMatrix();
-    glTranslatef(center.x, center.y, center.z);
-    glScalef(size.x, size.y, size.z);
-
-    glBegin(GL_LINES);
-    glVertex3f(-0.5f, -0.5f, -0.5f); glVertex3f(0.5f, -0.5f, -0.5f);
-    glVertex3f(0.5f, -0.5f, -0.5f); glVertex3f(0.5f, 0.5f, -0.5f);
-    glVertex3f(0.5f, 0.5f, -0.5f); glVertex3f(-0.5f, 0.5f, -0.5f);
-    glVertex3f(-0.5f, 0.5f, -0.5f); glVertex3f(-0.5f, -0.5f, -0.5f);
-
-    glVertex3f(-0.5f, -0.5f, 0.5f); glVertex3f(0.5f, -0.5f, 0.5f);
-    glVertex3f(0.5f, -0.5f, 0.5f); glVertex3f(0.5f, 0.5f, 0.5f);
-    glVertex3f(0.5f, 0.5f, 0.5f); glVertex3f(-0.5f, 0.5f, 0.5f);
-    glVertex3f(-0.5f, 0.5f, 0.5f); glVertex3f(-0.5f, -0.5f, 0.5f);
-
-    glVertex3f(-0.5f, -0.5f, -0.5f); glVertex3f(-0.5f, -0.5f, 0.5f);
-    glVertex3f(0.5f, -0.5f, -0.5f); glVertex3f(0.5f, -0.5f, 0.5f);
-    glVertex3f(0.5f, 0.5f, -0.5f); glVertex3f(0.5f, 0.5f, 0.5f);
-    glVertex3f(-0.5f, 0.5f, -0.5f); glVertex3f(-0.5f, 0.5f, 0.5f);
     glEnd();
-
-    glPopMatrix();
 }
 
-std::vector<Triangle> model;
-glm::vec3 center;
-
+std::vector<Triangle> stlModel;
+AABB modelAABB;
 void display() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
+    gluLookAt(0.5, 0.0, 0.0, 
+        0.0, 0.0, 0.0,   
+        0.0, 1.0, 0.0);  
 
-    // 카메라 위치를 모델의 중심에 기반하여 설정
-    gluLookAt(center.x + 3.0f, center.y + 3.0f, center.z + 3.0f,  // 카메라 위치
-        center.x, center.y, center.z,                      // 모델의 중심
-        0.0f, 1.0f, 0.0f);                                // 업 벡터
+    renderSTL(stlModel);
 
-    drawOOBB(model);
+    // AABB 렌더링
+    glColor3f(1.0f, 0.0f, 0.0f); // AABB를 빨간색으로 렌더링
+    renderAABB(modelAABB);
 
     glutSwapBuffers();
 }
 
-void initOpenGL(int argc, char** argv) {
-    glutInit(&argc, argv);
-    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
-    glutInitWindowSize(800, 600);
-    glutCreateWindow("STL OOBB Example");
+void reshape(int width, int height) {
+    glViewport(0, 0, width, height);
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    gluPerspective(60.0, (double)width / (double)height, 0.1, 100.0);
+}
 
-    glEnable(GL_DEPTH_TEST);
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+void setupLighting() {
+    glEnable(GL_LIGHTING);
+    glEnable(GL_LIGHT0);
 
-    glColor3f(1.0f, 1.0f, 1.0f);
+    GLfloat lightPos[] = { -2.0f, 2.0f, 0.0f, 0.0f };
+    glLightfv(GL_LIGHT0, GL_POSITION, lightPos);
 
-    glutDisplayFunc(display);
-    glutMainLoop();
+    GLfloat ambientLight[] = { 0.2f, 0.2f, 0.2f, 1.0f };
+    GLfloat diffuseLight[] = { 0.8f, 0.8f, 0.8f, 1.0f };
+    GLfloat specularLight[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+    glLightfv(GL_LIGHT0, GL_AMBIENT, ambientLight);
+    glLightfv(GL_LIGHT0, GL_DIFFUSE, diffuseLight);
+    glLightfv(GL_LIGHT0, GL_SPECULAR, specularLight);
 }
 
 int main(int argc, char** argv) {
-
-    model = loadSTL("C:/Users/brian/OneDrive/바탕 화면/3d_bounding_box/cat.stl");
-
-
-    // 모델의 중심을 계산
-    glm::vec3 min = model[0].vertex1;
-    glm::vec3 max = model[0].vertex1;
-    for (const auto& triangle : model) {
-        min = glm::min(min, triangle.vertex1);
-        min = glm::min(min, triangle.vertex2);
-        min = glm::min(min, triangle.vertex3);
-        max = glm::max(max, triangle.vertex1);
-        max = glm::max(max, triangle.vertex2);
-        max = glm::max(max, triangle.vertex3);
+    std::string filepath = "C:/Users/brian/OneDrive/바탕 화면/3d_bounding_box/cat.stl";
+    if (!loadSTL(filepath, stlModel)) {
+        return -1;
     }
-    center = (min + max) * 0.5f;
+    // AABB 계산
+    modelAABB = calculateAABB(stlModel);
 
-    initOpenGL(argc, argv);
+    glutInit(&argc, argv);
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
+    glutInitWindowSize(800, 600);
+    glutCreateWindow("STL Renderer");
+
+    glEnable(GL_DEPTH_TEST);
+    setupLighting(); 
+
+    glutDisplayFunc(display);
+    glutReshapeFunc(reshape);
+
+    glutMainLoop();
+
     return 0;
 }
