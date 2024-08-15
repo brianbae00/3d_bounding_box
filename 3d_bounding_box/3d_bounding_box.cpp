@@ -2,13 +2,18 @@
 #include <vector>
 #include <GL/glut.h>
 #include <glm/glm/glm.hpp>
+#include <glm/glm/gtc/matrix_transform.hpp>
 #include <fstream>
 #include <sstream>
 
 float rotationX = 0.0f;
 float rotationY = 0.0f;
+float objectTranslationX = 0.0f;
+float objectTranslationY = 0.0f;
+float objectTranslationZ = 0.0f;
 int lastMouseX, lastMouseY;
 bool isDragging = false;
+bool isObjectDragging = false;
 
 struct Triangle {
     glm::vec3 normal;
@@ -20,8 +25,20 @@ struct AABB {
     glm::vec3 max;
 };
 
+glm::vec3 cameraPos(1.0f, 0.0f, 0.0f);  // 기본 카메라 위치
+
 void mouseButton(int button, int state, int x, int y) {
     if (button == GLUT_LEFT_BUTTON) {
+        if (state == GLUT_DOWN) {
+            isObjectDragging = true;
+            lastMouseX = x;
+            lastMouseY = y;
+        }
+        else if (state == GLUT_UP) {
+            isObjectDragging = false;
+        }
+    }
+    else if (button == GLUT_RIGHT_BUTTON) {
         if (state == GLUT_DOWN) {
             isDragging = true;
             lastMouseX = x;
@@ -37,6 +54,33 @@ void mouseMotion(int x, int y) {
     if (isDragging) {
         rotationX += (y - lastMouseY) * 0.5f;
         rotationY += (x - lastMouseX) * 0.5f;
+        lastMouseX = x;
+        lastMouseY = y;
+
+        glutPostRedisplay();
+    }
+    else if (isObjectDragging) {
+        float sensitivity = 0.01f;
+
+        glm::vec3 objectPos(objectTranslationX, objectTranslationY, objectTranslationZ);
+
+        // Forward 벡터 (카메라에서 오브젝트로의 방향)
+        glm::vec3 forward = glm::normalize(objectPos - cameraPos);
+
+        // Right 벡터 (월드의 up 벡터와 forward 벡터의 외적)
+        glm::vec3 worldUp(0.0f, 1.0f, 0.0f);
+        glm::vec3 right = glm::normalize(glm::cross(worldUp, forward));
+
+        // Up 벡터 (forward와 right 벡터의 외적)
+        glm::vec3 up = glm::normalize(glm::cross(forward, right));
+
+        // 오브젝트를 right 벡터를 따라 이동
+        objectTranslationX += (x - lastMouseX) * sensitivity * -right.x;
+        objectTranslationZ += (x - lastMouseX) * sensitivity * -right.z;
+
+        // 오브젝트를 up 벡터를 따라 이동
+        objectTranslationY += (y - lastMouseY) * sensitivity * -up.y;
+
         lastMouseX = x;
         lastMouseY = y;
 
@@ -151,55 +195,53 @@ void display() {
 
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
-    gluLookAt(1.0, 0.0, 0.0, 
-        0.0, 0.0, 0.0,  
+    gluLookAt(cameraPos.x, cameraPos.y, cameraPos.z,
+        0.0, 0.0, 0.0,
         0.0, 1.0, 0.0);
 
-    glRotatef(rotationX, 1.0f, 0.0f, 0.0f); 
-    glRotatef(rotationY, 0.0f, 1.0f, 0.0f); 
-
-    glColor3f(0.5f, 0.5f, 0.5f);
-    renderSTL(stlModel1);
+    glRotatef(rotationX, 1.0f, 0.0f, 0.0f);
+    glRotatef(rotationY, 0.0f, 1.0f, 0.0f);
 
     glPushMatrix();
-    glm::vec3 translation2(0.0f, 0.0f, -0.1f); 
-    glTranslatef(translation2.x, translation2.y, translation2.z);
+    glColor3f(0.5f, 0.5f, 0.5f);
+    renderSTL(stlModel1);
+    glPopMatrix();
+
+    glPushMatrix();
+    glTranslatef(objectTranslationX, objectTranslationY, objectTranslationZ);
     glColor3f(0.5f, 0.5f, 0.5f);
     renderSTL(stlModel2);
 
     AABB movedAABB2 = modelAABB2;
-    movedAABB2.min += translation2;
-    movedAABB2.max += translation2;
+    movedAABB2.min += glm::vec3(objectTranslationX, objectTranslationY, objectTranslationZ);
+    movedAABB2.max += glm::vec3(objectTranslationX, objectTranslationY, objectTranslationZ);
 
     glPopMatrix();
 
     bool collision = checkAABBCollision(modelAABB1, movedAABB2);
 
-    if (collision) 
+    if (collision)
     {
-        glColor3f(1.0f, 0.0f, 0.0f); 
+        glColor3f(1.0f, 0.0f, 0.0f);
     }
-    else 
+    else
     {
         glColor3f(1.0f, 1.0f, 1.0f);
     }
     renderAABB(modelAABB1);
 
-    // 두 번째 모델의 AABB 렌더링
-    if (collision) 
+    if (collision)
     {
-        glColor3f(1.0f, 0.0f, 0.0f); 
+        glColor3f(1.0f, 0.0f, 0.0f);
     }
-    else 
+    else
     {
-        glColor3f(1.0f, 1.0f, 1.0f); 
+        glColor3f(1.0f, 1.0f, 1.0f);
     }
     renderAABB(movedAABB2);
 
     glutSwapBuffers();
 }
-
-
 
 void reshape(int width, int height) {
     glViewport(0, 0, width, height);
@@ -225,7 +267,6 @@ void setupLighting() {
     glEnable(GL_COLOR_MATERIAL);
     glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
 }
-
 
 int main(int argc, char** argv) {
     std::string filepath1 = "C:/Users/brian/OneDrive/바탕 화면/3d_bounding_box/cat.stl";
