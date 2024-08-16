@@ -25,9 +25,9 @@ struct AABB {
     glm::vec3 max;
 };
 
-glm::vec3 cameraPos(1.0f, 0.0f, 0.0f);  // 기본 카메라 위치
+glm::vec3 cameraPos(1.0f, 0.0f, 0.0f);
 
-// Octree Node 구조체
+
 struct OctreeNode {
     AABB box;
     std::vector<Triangle> triangles;
@@ -39,16 +39,14 @@ struct OctreeNode {
         }
     }
 };
-void renderAABB(const AABB& box);  // renderAABB 함수 프로토타입 추가
-// 최대 깊이 변수
+void renderAABB(const AABB& box);
+
 int maxDepth = 3;
 
-// AABB의 중심점 계산
 glm::vec3 calculateCenter(const AABB& box) {
     return (box.min + box.max) * 0.5f;
 }
 
-// AABB를 8개로 분할
 std::vector<AABB> splitAABB(const AABB& box) {
     std::vector<AABB> children(8);
     glm::vec3 center = calculateCenter(box);
@@ -69,7 +67,6 @@ std::vector<AABB> splitAABB(const AABB& box) {
     return children;
 }
 
-// Octree를 생성하는 재귀 함수
 OctreeNode* buildOctree(const AABB& box, const std::vector<Triangle>& triangles, int depth) {
     if (depth > maxDepth || triangles.empty()) {
         return nullptr;
@@ -108,18 +105,16 @@ OctreeNode* buildOctree(const AABB& box, const std::vector<Triangle>& triangles,
     return node;
 }
 
-// Octree 렌더링 함수
 void renderOctree(const OctreeNode* node) {
     if (!node) return;
 
-    renderAABB(node->box);  // renderAABB 호출
+    renderAABB(node->box);
 
     for (int i = 0; i < 8; ++i) {
         renderOctree(node->children[i]);
     }
 }
 
-// Octree 삭제 함수
 void deleteOctree(OctreeNode* node) {
     if (!node) return;
 
@@ -279,7 +274,6 @@ AABB modelAABB1;
 std::vector<Triangle> stlModel2;
 AABB modelAABB2;
 
-// Octree 노드 포인터
 OctreeNode* octree1 = nullptr;
 OctreeNode* octree2 = nullptr;
 
@@ -375,20 +369,44 @@ void reshape(int width, int height) {
 
 void setupLighting() {
     glEnable(GL_LIGHTING);
+
     glEnable(GL_LIGHT0);
+    GLfloat lightPos0[] = { -2.0f, 2.0f, 0.0f, 1.0f };
+    GLfloat ambientLight0[] = { 0.2f, 0.2f, 0.2f, 1.0f };
+    GLfloat diffuseLight0[] = { 0.8f, 0.8f, 0.8f, 1.0f };
+    GLfloat specularLight0[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+    glLightfv(GL_LIGHT0, GL_POSITION, lightPos0);
+    glLightfv(GL_LIGHT0, GL_AMBIENT, ambientLight0);
+    glLightfv(GL_LIGHT0, GL_DIFFUSE, diffuseLight0);
+    glLightfv(GL_LIGHT0, GL_SPECULAR, specularLight0);
 
-    GLfloat lightPos[] = { -2.0f, 2.0f, 0.0f, 0.0f };
-    glLightfv(GL_LIGHT0, GL_POSITION, lightPos);
+    glEnable(GL_LIGHT1);
+    GLfloat lightPos1[] = { 2.0f, -2.0f, 2.0f, 1.0f };
+    GLfloat ambientLight1[] = { 0.1f, 0.1f, 0.1f, 1.0f };
+    GLfloat diffuseLight1[] = { 0.7f, 0.7f, 0.7f, 1.0f };
+    GLfloat specularLight1[] = { 0.9f, 0.9f, 0.9f, 1.0f };
+    glLightfv(GL_LIGHT1, GL_POSITION, lightPos1);
+    glLightfv(GL_LIGHT1, GL_AMBIENT, ambientLight1);
+    glLightfv(GL_LIGHT1, GL_DIFFUSE, diffuseLight1);
+    glLightfv(GL_LIGHT1, GL_SPECULAR, specularLight1);
 
-    GLfloat ambientLight[] = { 0.2f, 0.2f, 0.2f, 1.0f };
-    GLfloat diffuseLight[] = { 0.8f, 0.8f, 0.8f, 1.0f };
-    GLfloat specularLight[] = { 1.0f, 1.0f, 1.0f, 1.0f };
-    glLightfv(GL_LIGHT0, GL_AMBIENT, ambientLight);
-    glLightfv(GL_LIGHT0, GL_DIFFUSE, diffuseLight);
-    glLightfv(GL_LIGHT0, GL_SPECULAR, specularLight);
+    glEnable(GL_LIGHT2);
+    GLfloat lightPos2[] = { 0.0f, 5.0f, 0.0f, 1.0f };
+    GLfloat ambientLight2[] = { 0.15f, 0.15f, 0.15f, 1.0f };
+    GLfloat diffuseLight2[] = { 0.6f, 0.6f, 0.6f, 1.0f };
+    GLfloat specularLight2[] = { 0.8f, 0.8f, 0.8f, 1.0f };
+    glLightfv(GL_LIGHT2, GL_POSITION, lightPos2);
+    glLightfv(GL_LIGHT2, GL_AMBIENT, ambientLight2);
+    glLightfv(GL_LIGHT2, GL_DIFFUSE, diffuseLight2);
+    glLightfv(GL_LIGHT2, GL_SPECULAR, specularLight2);
 
     glEnable(GL_COLOR_MATERIAL);
     glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+
+    GLfloat specularMaterial[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+    GLfloat shininess = 50.0f;
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, specularMaterial);
+    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, shininess);
 }
 
 int main(int argc, char** argv) {
